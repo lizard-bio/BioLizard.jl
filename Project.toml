@@ -1,0 +1,7 @@
+name = "BioLizard"
+uuid = "b54d7771-5eef-4c20-b8e0-2d53af1051e5"
+authors = ["michielstock <michielfmstock@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
