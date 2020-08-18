@@ -1,6 +1,6 @@
 #=
 Created on Tuesday 11 August 2020
-Last update: -
+Last update: Tuesday 18 August 2020
 
 @author: Michiel Stock
 michielfmstock@gmail.com
@@ -11,9 +11,9 @@ Useful for feature selection.
 
 module ZeroNorm
 
-export momentum!, flip, findzeronorm!, LinearAlgebra
+export momentum!, flip, findzeronorm!
 
-using Zygote
+using Zygote, LinearAlgebra
 
 """
 momentum!(w, s, dl!, dw;
@@ -40,11 +40,72 @@ function momentum!(w::AbstractVecOrMat,
 	return w
 end
 
+abstract type L0Solver end
+
+struct SimulatedAnnealing <: L0Solver
+	p₀
+	p₁
+	r
+	kT
+	Tmin
+	Tmax
+end
+
+"""
+	SimulatedAnnealing(;p₀=0.05, p₁=0.05, r=0.8, kT=1000, Tmin=1e-3, Tmax=1e3)
+
+Solver for L0-norm minimization
+"""
+SimulatedAnnealing(;p₀=0.05, p₁=0.05, r=0.8, kT=1000,
+			Tmin=1e-3, Tmax=1e3) = SimulatedAnnealing(p₀, p₁, r, kT, Tmin, Tmax)
+
 """
 Turns a `true` to a `false` with probability `p₀` and a `false` to a `true`
 with probability `p₁`.
 """
 flip(bit::Bool, p₀, p₁) = bit ? rand() > p₀ : rand() < p₁
+
+
+function findzeronormSA!(w, loss, λ, s, p₀, p₁, r, kT,
+	Tmin, Tmax; verbose::Bool=false,
+	momentumpars...)
+	n = length(w)
+	dw = similar(w)
+	# compute gradient for momentum
+	dl!(w, dw, β) = dw .= (1.0 - β) .* loss'(w) .+ β .* dw
+	snew = copy(s)
+	sbest = copy(s)
+	j(w, s) = loss(w .* s) + λ * sum(s)
+	T = Tmax
+	best_obj = Inf
+	current_obj = Inf
+	# create structure to store the objective through the iterations
+	obj_vals = Vector{Float64}(undef, ceil(Int, (log(Tmin) - log(Tmax)) / log(r)))
+	iter = 0
+	while T > Tmin
+		iter += 1
+		for rep in 1:kT
+			# perturbate s
+			snew .= flip.(s, p₀, p₁)
+			# update w
+			momentum!(w, snew, dl!, dw; momentumpars...)
+			obj = j(w, snew)
+			if obj < current_obj || rand() < exp((current_obj - obj)/T)
+				current_obj = obj
+				s .= snew
+			end
+			if obj < best_obj
+				best_obj = obj
+				sbest .= s
+			end
+		end
+		verbose && println("T=$T : obj=$best_obj, nfeatures=$(sum(sbest))")
+		obj_vals[iter] = best_obj
+		T *= r
+		end
+	return sbest, obj_vals
+end
+
 
 """
 	findzeronorm!(w0, loss, λ[, s0]; p₀=0.05, p₁=0.05, r=0.8, kT=1000,
