@@ -11,9 +11,9 @@ Useful for feature selection.
 
 module ZeroNorm
 
-export momentum!, flip, findzeronorm!
+export momentum!, flip, findzeronorm!, LinearAlgebra
 
-using Zygote, LinearAlgebra
+using Zygote
 
 """
 momentum!(w, s, dl!, dw;
@@ -47,7 +47,7 @@ with probability `p₁`.
 flip(bit::Bool, p₀, p₁) = bit ? rand() > p₀ : rand() < p₁
 
 """
-	findzeronorm!(w0, loss, λ; p₀=0.05, p₁=0.05, r=0.8, kT=1000,
+	findzeronorm!(w0, loss, λ[, s0]; p₀=0.05, p₁=0.05, r=0.8, kT=1000,
 							Tmin=1e-3, Tmax=1e3, verbose=true, momentumpars...)
 
 Finds the zero norm for a model with loss function regularized with a zero-"norm":
@@ -61,6 +61,7 @@ Parameters:
 	- `w0` : starting value for the parameter vector
 	- `loss` : a differentiable loss function (we use autodiff)
 	- `λ` : regularization parameter
+	- `s0` : initial guess for `s`, optional, uses all features initially by default
 	- `p₀` : probability of true -> false in `s`
 	- `p₁`: probability of false -> true in `s`
 	- `r` : cooling rate
@@ -70,14 +71,15 @@ Parameters:
 	- `verbose` : flag to print the convergence during fitting
 	- `momentumpars` : parameters to determine behaviour for momentum
 """
-function findzeronorm!(w0, loss, λ; p₀=0.01, p₁=0.01, r=0.8, kT::Int=1000,
+function findzeronorm!(w0, loss, λ, s0; p₀=0.01, p₁=0.01, r=0.8, kT::Int=1000,
 							Tmin=1e-3, Tmax=1e3, verbose::Bool=false,
 							momentumpars...)
 	w = w0
 	n = length(w)
 	dw = similar(w)
+	# compute gradient for momentum
 	dl!(w, dw, β) = dw .= (1.0 - β) .* loss'(w) .+ β .* dw
-	s = ones(Bool, n)  # depart from using all variables
+	s = s0  # depart from using all variables
 	snew = copy(s)
 	sbest = copy(s)
 	j(w, s) = loss(w .* s) + λ * sum(s)
@@ -110,5 +112,7 @@ function findzeronorm!(w0, loss, λ; p₀=0.01, p₁=0.01, r=0.8, kT::Int=1000,
 	end
 	return sbest, obj_vals
 end
+
+findzeronorm!(w0, loss, λ; kwargs...) = findzeronorm!(w0, loss, λ, ones(Bool, length(w0)); kwargs...)
 
 end  # module ZeroNorm

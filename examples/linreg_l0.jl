@@ -30,6 +30,10 @@ w = zeros(p)
 # use the method to find the norm
 s, obj_vals = findzeronorm!(w, l, λ, verbose=true)
 
+# can also use an initial s
+#s0 = ones(Bool, p)
+#s, obj_vals = findzeronorm!(w, l, λ, s0, verbose=true)
+
 # get confusion table
 tp = sum(strue[s])  # true pos
 fp = sum(.!strue[s])
